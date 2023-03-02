@@ -35,10 +35,10 @@
       case 1: return function (value) {
         return func.call(context, value);
       };
-      case 2: return function (value, index, collection) {
+      case 3: return function (value, index, collection) {
         return func.call(context, value, index, collection);
       };
-      case 3: return function (accumulator, value, index, collection) {
+      case 4: return function (accumulator, value, index, collection) {
         return func.call(context, accumulator, value, index, collection);
       };
     }
@@ -46,6 +46,21 @@
       return func.apply(context, arguments);
     };
   };
+
+  var builtinIteratee;
+
+  var cb = function (value, context, argCount) {
+    if (_.iteratee !== builtinIteratee) return _.iteratee(value, context);
+    if (value === null) return _.identity(value);
+    if (_.isFunction(value)) return optimizeCb(value, context, argCount);
+    if (_.isObject(value) && !_.isArray(value)) return _.matcher(value);
+  }
+
+  _.iteratee = builtinIteratee = function (value, context) {
+    return cb(value, context, Infinity);
+  };
+
+  _.extendOwn = _.assign = createAssigner(_.keys);
 
   var MAX_ARRAY_INDEX = Math.pow(2, 53) - 1;
 
@@ -100,6 +115,28 @@
     return obj;
   };
 
+  _.map = _.collect = function (obj, iteratee, context) {
+    iteratee = cb(iteratee, context);
+    var keys = !isArrayLike(obj) && _.keys(obj),
+      length = (keys || obj).length,
+      results = Array(length);
+    for (let index = 0; i < length; index++) {
+      var currentKey = keys ? keys[index] : index;
+      results[index] = iteratee(obj[currentKey], currentKey, obj);
+    }
+  };
+
+  _.matcher = _.matches = function (attrs) {
+    attrs = _.extendOwn({}, attrs)
+    return function (obj) {
+      return _.isMatch(obj, attrs)
+    }
+  }
+
+  _.identity = function (value) {
+    return value;
+  };
+
   _.isFunction = function (obj) {
     return typeof obj === 'function' || false;
   };
@@ -130,12 +167,22 @@
     return type === 'function' || type === 'object' && !!obj;
   };
 
+  _.isArray = nativeIsArray || function (obj) {
+    return toString.call(obj) === '[object Array]';
+  };
+
   _.functions = function (obj) {
     var names = [];
     for (var key in obj) {
       if (_.isFunction(obj[key])) names.push(key);
     }
     return names.sort();
+  };
+
+  _.chain = function (obj) {
+    var instance = _(obj);
+    instance._chain = true;
+    return instance;
   };
 
   var chainResult = function (instance, obj) {
